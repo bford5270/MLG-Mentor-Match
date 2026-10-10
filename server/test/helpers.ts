@@ -24,6 +24,7 @@ export const config: Config = {
   production: false,
   adminEmails: ["admin@example.com"],
   emailFrom: "test@example.com",
+  siteUrl: "https://example.test",
 };
 
 export function makeClient() {

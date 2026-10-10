@@ -5,6 +5,8 @@ export interface Config {
   adminEmails: string[];
   emailFrom: string;
   resendApiKey?: string;
+  /** Public URL of the app, used in emails. */
+  siteUrl: string;
 }
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
@@ -20,5 +22,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
       .filter(Boolean),
     emailFrom: env.EMAIL_FROM ?? "1st MLG Mentorship <mentorship@1stmedlisteningpost.com>",
     resendApiKey: env.RESEND_API_KEY || undefined,
+    siteUrl: env.SITE_URL ?? "https://app-production-37c9.up.railway.app",
   };
 }

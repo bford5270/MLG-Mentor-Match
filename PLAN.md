@@ -29,9 +29,10 @@ A mobile-only mentorship app for the officers of **1st Marine Logistics Group**,
 
 **Hard rules** (a pair is never proposed if one fails):
 1. **No reporting-chain matches.** A mentor may not sit in the mentee's chain of command: same section/company with a senior–subordinate relationship, or the mentee's reporting senior or reviewing officer. Profiles capture unit/subordinate command and reporting senior.
-2. **Grade gap.** The mentor must be at least one grade senior (configurable; default 2 for O-1/O-2 mentees).
+2. **Grade gap.** The mentor must be at least one grade senior (two for O-1/O-2 mentees). Warrant officer mentees need a more senior warrant or an O-3 and above; warrant officers don't mentor commissioned officers.
 3. **PRD overlap.** Both officers must have at least 6 months left before their PRD/EAS.
 4. **Capacity.** Each mentor sets a max number of mentees (default 1, max 3).
+5. **No repeats.** A pair the G-10 rejected is never proposed again.
 
 **Same-service preference.** Matching runs a same-service pass first. A mentee who is still unmatched after the same-service pass is eligible for cross-service candidates in the next pass. Those proposals are flagged *"cross-service"* in the G-10's queue, so they are a visible, deliberate choice.
 
@@ -95,7 +96,7 @@ Railway project
 |---|---|---|
 | 0. Scaffold | Repo layout (`server/` + `web/`), Drizzle schema + first migration, PWA shell, health endpoint, Railway config | 2–3 days |
 | 1. Auth + profiles ✅ | Roster upload (CSV from G-1) by admin, email-code sign-in, sessions, onboarding profile, safety banner acknowledgment | 1 week |
-| 2. Matching + G-10 queue | Port scorer with new dimensions + hard rules + same-service-first passes; batch match; mobile approval queue | 1–1.5 weeks |
+| 2. Matching + G-10 queue ✅ | Port scorer with new dimensions + hard rules + same-service-first passes; batch match; mobile approval queue | 1–1.5 weeks |
 | 3. Chat | Websocket chat, history, unread badges, report/block/end, access tests | 1–1.5 weeks |
 | 4. Push + touch points | VAPID push, touch-point engine, editable curriculum, email fallback | 1 week |
 | 5. Lifecycle + ops | PRD auto-end, end-of-match feedback, weekly G-10 digest, retention purge, backups | 1 week |

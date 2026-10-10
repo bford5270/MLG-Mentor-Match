@@ -6,6 +6,7 @@ import type * as schema from "./db/schema.js";
 import type { Mailer } from "./lib/mailer.js";
 import { adminRoutes } from "./routes/admin.js";
 import { authRoutes } from "./routes/auth.js";
+import { matchingRoutes } from "./routes/matching.js";
 import { meRoutes } from "./routes/me.js";
 
 export type Db = PostgresJsDatabase<typeof schema>;
@@ -44,6 +45,7 @@ export function createApi(deps: Deps) {
 
   api.route("/auth", authRoutes(deps));
   api.route("/admin", adminRoutes(deps));
+  api.route("/matching", matchingRoutes(deps));
   api.route("/", meRoutes(deps));
   api.all("*", (c) => c.json({ error: "not found" }, 404));
   return api;

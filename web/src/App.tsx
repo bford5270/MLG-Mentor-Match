@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { api, ApiError, type Me } from "./api";
 import Admin from "./screens/Admin";
 import Home from "./screens/Home";
+import MatchQueue from "./screens/MatchQueue";
 import ProfileForm from "./screens/ProfileForm";
 import SafetyNotice from "./screens/SafetyNotice";
 import SignIn from "./screens/SignIn";
@@ -22,7 +23,7 @@ function useIsMobile() {
 export default function App() {
   const isMobile = useIsMobile();
   const [me, setMe] = useState<Me | null | undefined>(undefined);
-  const [view, setView] = useState<"home" | "profile" | "admin">("home");
+  const [view, setView] = useState<"home" | "profile" | "admin" | "queue">("home");
 
   const load = useCallback(async () => {
     try {
@@ -58,5 +59,14 @@ export default function App() {
   if (view === "profile")
     return <ProfileForm me={me} onSaved={() => load().then(() => setView("home"))} onCancel={() => setView("home")} />;
   if (view === "admin" && me.user.role === "admin") return <Admin selfId={me.user.id} onBack={() => setView("home")} />;
-  return <Home me={me} onEditProfile={() => setView("profile")} onAdmin={() => setView("admin")} onSignedOut={() => setMe(null)} />;
+  if (view === "queue" && (me.user.role === "approver" || me.user.role === "admin")) return <MatchQueue onBack={() => setView("home")} />;
+  return (
+    <Home
+      me={me}
+      onEditProfile={() => setView("profile")}
+      onAdmin={() => setView("admin")}
+      onQueue={() => setView("queue")}
+      onSignedOut={() => setMe(null)}
+    />
+  );
 }

@@ -1,8 +1,8 @@
-import { and, asc, eq, ilike, inArray } from "drizzle-orm";
+import { and, asc, eq, ilike, inArray, or } from "drizzle-orm";
 import { Hono } from "hono";
 import { z } from "zod";
 import type { Deps } from "../app.js";
-import { profiles, roster, users } from "../db/schema.js";
+import { matches, profiles, roster, users } from "../db/schema.js";
 import {
   CAREER_GOALS,
   COMMISSIONING_SOURCES,
@@ -114,6 +114,42 @@ export function meRoutes({ db, config }: Deps) {
     await db.insert(profiles).values(row).onConflictDoUpdate({ target: profiles.userId, set: row });
     const [profile] = await db.select().from(profiles).where(eq(profiles.userId, user.id));
     return c.json({ profile });
+  });
+
+  // The officer's approved matches. Pending proposals stay invisible until the
+  // approver signs off, so nobody sees a pairing that might be rejected.
+  app.get("/me/matches", async (c) => {
+    const me = c.get("user");
+    const rows = await db
+      .select()
+      .from(matches)
+      .where(and(eq(matches.status, "active"), or(eq(matches.mentorId, me.id), eq(matches.menteeId, me.id))));
+    const partnerIds = rows.map((m) => (m.mentorId === me.id ? m.menteeId : m.mentorId));
+    const partners = partnerIds.length
+      ? await db.select().from(profiles).where(inArray(profiles.userId, partnerIds))
+      : [];
+    return c.json({
+      matches: rows.map((m) => {
+        const partnerId = m.mentorId === me.id ? m.menteeId : m.mentorId;
+        const p = partners.find((x) => x.userId === partnerId);
+        return {
+          id: m.id,
+          myRole: m.mentorId === me.id ? "mentor" : "mentee",
+          approvedAt: m.approvedAt,
+          endsOn: m.endsOn,
+          partner: p && {
+            name: p.name,
+            service: p.service,
+            grade: p.grade,
+            mosOrDesignator: p.mosOrDesignator,
+            unit: p.unit,
+            careerGoals: p.careerGoals,
+            leadershipInterests: p.leadershipInterests,
+            bio: p.bio,
+          },
+        };
+      }),
+    });
   });
 
   // Picker for reporting senior / reviewing officer. Names, grades and units
