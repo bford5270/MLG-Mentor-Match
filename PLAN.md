@@ -94,7 +94,7 @@ Railway project
 | Phase | Scope | Effort |
 |---|---|---|
 | 0. Scaffold | Repo layout (`server/` + `web/`), Drizzle schema + first migration, PWA shell, health endpoint, Railway config | 2–3 days |
-| 1. Auth + profiles | Roster upload (CSV from G-1) by admin, email-code sign-in, sessions, onboarding profile, safety banner acknowledgment | 1 week |
+| 1. Auth + profiles ✅ | Roster upload (CSV from G-1) by admin, email-code sign-in, sessions, onboarding profile, safety banner acknowledgment | 1 week |
 | 2. Matching + G-10 queue | Port scorer with new dimensions + hard rules + same-service-first passes; batch match; mobile approval queue | 1–1.5 weeks |
 | 3. Chat | Websocket chat, history, unread badges, report/block/end, access tests | 1–1.5 weeks |
 | 4. Push + touch points | VAPID push, touch-point engine, editable curriculum, email fallback | 1 week |

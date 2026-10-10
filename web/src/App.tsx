@@ -1,4 +1,10 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { api, ApiError, type Me } from "./api";
+import Admin from "./screens/Admin";
+import Home from "./screens/Home";
+import ProfileForm from "./screens/ProfileForm";
+import SafetyNotice from "./screens/SafetyNotice";
+import SignIn from "./screens/SignIn";
 
 // Mobile-only app: on a desktop-sized, non-touch screen show a "use your phone" page.
 function useIsMobile() {
@@ -15,6 +21,21 @@ function useIsMobile() {
 
 export default function App() {
   const isMobile = useIsMobile();
+  const [me, setMe] = useState<Me | null | undefined>(undefined);
+  const [view, setView] = useState<"home" | "profile" | "admin">("home");
+
+  const load = useCallback(async () => {
+    try {
+      setMe(await api<Me>("GET", "/me"));
+    } catch (e) {
+      if (e instanceof ApiError && e.status === 401) setMe(null);
+      else throw e;
+    }
+  }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
 
   if (!isMobile) {
     return (
@@ -30,16 +51,12 @@ export default function App() {
     );
   }
 
-  return (
-    <main className="flex min-h-dvh flex-col bg-white px-4 pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]">
-      <header className="py-6">
-        <h1 className="text-2xl font-semibold text-slate-900">1st MLG Mentor Match</h1>
-        <p className="text-sm text-slate-600">Officer mentorship</p>
-      </header>
-      <section className="rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
-        Unclassified only. No CUI, no PII about others, no operational details.
-      </section>
-      <p className="mt-6 text-slate-600">Sign-in is coming in Phase 1.</p>
-    </main>
-  );
+  if (me === undefined) return <main className="min-h-dvh bg-white" />;
+  if (me === null) return <SignIn onSignedIn={load} />;
+  if (!me.user.safetyAcknowledged) return <SafetyNotice onDone={load} />;
+  if (!me.profile) return <ProfileForm me={me} onSaved={load} />;
+  if (view === "profile")
+    return <ProfileForm me={me} onSaved={() => load().then(() => setView("home"))} onCancel={() => setView("home")} />;
+  if (view === "admin" && me.user.role === "admin") return <Admin selfId={me.user.id} onBack={() => setView("home")} />;
+  return <Home me={me} onEditProfile={() => setView("profile")} onAdmin={() => setView("admin")} onSignedOut={() => setMe(null)} />;
 }

@@ -30,10 +30,11 @@ const createdAt = () => timestamp("created_at", { withTimezone: true }).notNull(
 // Officers allowed to register. Loaded by an admin from the unit's officer
 // roster; sign-in codes are only ever sent to addresses on this list.
 export const roster = pgTable("roster", {
-  email: text("email").primaryKey(), // stored lowercased
+  id: uuid("id").primaryKey().defaultRandom(),
+  email: text("email").notNull().unique(), // stored lowercased
   name: text("name").notNull(),
   service: serviceEnum("service").notNull(),
-  grade: text("grade").notNull(), // "O-1" … "O-6"
+  grade: text("grade").notNull(), // "O-1" … "O-6", "W-1" … "W-5"
   unit: text("unit"),
   active: boolean("active").notNull().default(true),
   createdAt: createdAt(),
@@ -55,8 +56,9 @@ export const profiles = pgTable("profiles", {
   mosOrDesignator: text("mos_or_designator").notNull(),
   unit: text("unit").notNull(), // subordinate command, e.g. "CLR-1", "1st Med Bn"
   section: text("section"),
-  reportingSeniorUserId: uuid("reporting_senior_user_id").references(() => users.id),
-  reviewingOfficerUserId: uuid("reviewing_officer_user_id").references(() => users.id),
+  // Roster entries, not users: the RS/RO may never register themselves.
+  reportingSeniorRosterId: uuid("reporting_senior_roster_id").references(() => roster.id),
+  reviewingOfficerRosterId: uuid("reviewing_officer_roster_id").references(() => roster.id),
   prd: date("prd").notNull(), // projected rotation date (or EAS, whichever is sooner)
   commissioningSource: text("commissioning_source"),
   mentorshipRole: mentorshipRoleEnum("mentorship_role").notNull(),
