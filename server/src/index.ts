@@ -6,6 +6,8 @@ import { Hono } from "hono";
 import { logger } from "hono/logger";
 import { createApi } from "./app.js";
 import { loadConfig } from "./config.js";
+import { migrate } from "drizzle-orm/postgres-js/migrator";
+import { fileURLToPath } from "node:url";
 import { db } from "./db/client.js";
 import { Hub } from "./lib/hub.js";
 import { ConsoleMailer, ResendMailer } from "./lib/mailer.js";
@@ -14,6 +16,10 @@ import { seedTouchpoints, startScheduler } from "./domain/jobs.js";
 import { SESSION_COOKIE, userIdFromToken } from "./lib/session.js";
 
 const config = loadConfig();
+
+// Apply pending migrations before serving (dist/index.js → ../drizzle).
+await migrate(db, { migrationsFolder: fileURLToPath(new URL("../drizzle", import.meta.url)) });
+console.log("migrations up to date");
 if (config.production && !config.resendApiKey) {
   console.error("RESEND_API_KEY is not set — sign-in codes will only appear in the server log");
 }
