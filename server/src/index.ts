@@ -9,6 +9,8 @@ import { loadConfig } from "./config.js";
 import { db } from "./db/client.js";
 import { Hub } from "./lib/hub.js";
 import { ConsoleMailer, ResendMailer } from "./lib/mailer.js";
+import { NoopPusher, WebPusher } from "./lib/push.js";
+import { seedTouchpoints, startScheduler } from "./domain/jobs.js";
 import { SESSION_COOKIE, userIdFromToken } from "./lib/session.js";
 
 const config = loadConfig();
@@ -18,10 +20,16 @@ if (config.production && !config.resendApiKey) {
 const mailer = config.resendApiKey ? new ResendMailer(config.resendApiKey, config.emailFrom) : new ConsoleMailer();
 
 const hub = new Hub();
+const pusher =
+  process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY
+    ? new WebPusher(process.env.VAPID_PUBLIC_KEY, process.env.VAPID_PRIVATE_KEY, process.env.VAPID_SUBJECT ?? "mailto:mentorship@1stmedlisteningpost.com")
+    : new NoopPusher();
+if (!pusher.publicKey) console.error("VAPID keys are not set — push notifications are off");
+const deps = { db, mailer, config, hub, pusher };
 const app = new Hono();
 const { upgradeWebSocket, injectWebSocket } = createNodeWebSocket({ app });
 app.use("/api/*", logger());
-app.route("/api", createApi({ db, mailer, config, hub }));
+app.route("/api", createApi(deps));
 
 // Live updates. Receive-only: messages are sent over REST, so the socket just
 // tells the client something changed. Authenticated by the session cookie.
@@ -53,3 +61,6 @@ app.get("*", serveStatic({ path: "../web/dist/index.html" }));
 const port = Number(process.env.PORT ?? 3000);
 const server = serve({ fetch: app.fetch, port }, () => console.log(`listening on :${port}`));
 injectWebSocket(server);
+
+await seedTouchpoints(deps);
+if (process.env.DISABLE_SCHEDULER !== "true") startScheduler(deps);

@@ -1,11 +1,11 @@
 import { useEffect, useState } from "react";
 import { api, type Me } from "../api";
 import { subscribe } from "../live";
+import Feedback from "../components/Feedback";
+import Notifications from "../components/Notifications";
+import { disablePushForSignOut } from "../push";
 import { Button, SafetyBanner, Screen } from "../components/ui";
 
-const isStandalone = () =>
-  window.matchMedia("(display-mode: standalone)").matches || (navigator as { standalone?: boolean }).standalone === true;
-const isIOS = () => /iPhone|iPad|iPod/.test(navigator.userAgent);
 
 export interface MyMatch {
   id: string;
@@ -20,11 +20,12 @@ interface HomeProps {
   onEditProfile: () => void;
   onAdmin: () => void;
   onQueue: () => void;
+  onProgram: () => void;
   onOpenChat: (m: MyMatch) => void;
   onSignedOut: () => void;
 }
 
-export default function Home({ me, onEditProfile, onAdmin, onQueue, onOpenChat, onSignedOut }: HomeProps) {
+export default function Home({ me, onEditProfile, onAdmin, onQueue, onProgram, onOpenChat, onSignedOut }: HomeProps) {
   const [matches, setMatches] = useState<MyMatch[] | null>(null);
   useEffect(() => {
     const load = () => api<{ matches: MyMatch[] }>("GET", "/me/matches").then((r) => setMatches(r.matches)).catch(() => setMatches([]));
@@ -39,6 +40,7 @@ export default function Home({ me, onEditProfile, onAdmin, onQueue, onOpenChat, 
   const role = { mentee: "Looking for a mentor", mentor: "Mentoring", both: "Mentoring and looking for a mentor" }[p.mentorshipRole];
 
   async function signOut() {
+    await disablePushForSignOut();
     await api("POST", "/auth/logout", {});
     onSignedOut();
   }
@@ -46,16 +48,8 @@ export default function Home({ me, onEditProfile, onAdmin, onQueue, onOpenChat, 
   return (
     <Screen title={`${p.grade} ${p.name.split(",")[0]}`} subtitle={`${p.unit} · ${role}`}>
       <div className="space-y-4">
-        {!isStandalone() && (
-          <section className="rounded-lg border border-slate-300 p-4 text-sm text-slate-800">
-            <h2 className="mb-1 font-semibold">Add this app to your Home Screen</h2>
-            {isIOS() ? (
-              <p>In Safari, tap the Share button, then <strong>Add to Home Screen</strong>. Notifications only work once it's installed.</p>
-            ) : (
-              <p>Open your browser menu and choose <strong>Install app</strong> or <strong>Add to Home screen</strong>.</p>
-            )}
-          </section>
-        )}
+        <Notifications />
+        <Feedback />
 
         {matches?.map((m) => m.partner && (
           <section key={m.id} className="space-y-2 rounded-lg border border-red-900/30 bg-red-50/40 p-4">
@@ -83,6 +77,7 @@ export default function Home({ me, onEditProfile, onAdmin, onQueue, onOpenChat, 
 
         <Button variant="secondary" className="w-full" onClick={onEditProfile}>Edit profile</Button>
         {(me.user.role === "approver" || me.user.role === "admin") && <Button variant="secondary" className="w-full" onClick={onQueue}>Match queue</Button>}
+        {(me.user.role === "approver" || me.user.role === "admin") && <Button variant="secondary" className="w-full" onClick={onProgram}>Program &amp; touch points</Button>}
         {me.user.role === "admin" && <Button variant="secondary" className="w-full" onClick={onAdmin}>Admin</Button>}
         <Button variant="ghost" className="w-full" onClick={signOut}>Sign out</Button>
         <SafetyBanner />

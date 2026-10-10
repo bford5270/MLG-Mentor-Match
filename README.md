@@ -32,6 +32,19 @@ TEST_DATABASE_URL=postgres://… pnpm --filter server test   # API tests; WIPES 
 | `EMAIL_FROM` | `1st MLG Mentorship <mentorship@1stmedlisteningpost.com>` |
 | `ADMIN_EMAILS` | Comma-separated; these addresses become admins on sign-in, roster or not |
 | `PORT` | `3000` |
+| `SITE_URL` | Public URL used in emails |
+| `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` / `VAPID_SUBJECT` | Web push. Without them, push is off and officers rely on the unread-message email |
+| `DISABLE_SCHEDULER` | `true` to stop background jobs (local dev only) |
+
+## Background jobs
+
+An in-process scheduler runs every 10 minutes (guarded by a Postgres advisory lock):
+
+- **Touch points**: posts due officership prompts into each pair's chat and pushes both officers (7am–8pm Pacific only). The kickoff posts immediately on approval.
+- **Unread email**: emails an officer whose messages have sat unread for 2+ hours, at most once a day. No message content.
+- **PRD auto-end**: ends active matches after the earlier PRD and asks both officers for feedback.
+- **Daily purge**: deletes chat messages 30 days after a match closes, and stale sign-in codes.
+- **Weekly digest**: Monday 8am Pacific, emailed to approvers and admins.
 
 ## Roster CSV
 

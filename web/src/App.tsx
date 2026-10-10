@@ -5,6 +5,8 @@ import Chat from "./screens/Chat";
 import Home, { type MyMatch } from "./screens/Home";
 import { startLive, stopLive } from "./live";
 import MatchQueue from "./screens/MatchQueue";
+import ProgramScreen from "./screens/Program";
+import { syncPush } from "./push";
 import ProfileForm from "./screens/ProfileForm";
 import SafetyNotice from "./screens/SafetyNotice";
 import SignIn from "./screens/SignIn";
@@ -25,7 +27,7 @@ function useIsMobile() {
 export default function App() {
   const isMobile = useIsMobile();
   const [me, setMe] = useState<Me | null | undefined>(undefined);
-  const [view, setView] = useState<"home" | "profile" | "admin" | "queue" | "chat">("home");
+  const [view, setView] = useState<"home" | "profile" | "admin" | "queue" | "chat" | "program">("home");
   const [chatWith, setChatWith] = useState<MyMatch | null>(null);
 
   const load = useCallback(async () => {
@@ -43,8 +45,10 @@ export default function App() {
 
   const signedIn = Boolean(me);
   useEffect(() => {
-    if (signedIn) startLive();
-    else stopLive();
+    if (signedIn) {
+      startLive();
+      syncPush().catch(() => {});
+    } else stopLive();
   }, [signedIn]);
 
   if (!isMobile) {
@@ -70,6 +74,7 @@ export default function App() {
   if (view === "admin" && me.user.role === "admin") return <Admin selfId={me.user.id} onBack={() => setView("home")} />;
   if (view === "chat" && chatWith?.partner)
     return <Chat matchId={chatWith.id} myId={me.user.id} partner={chatWith.partner} onBack={() => setView("home")} />;
+  if (view === "program" && (me.user.role === "approver" || me.user.role === "admin")) return <ProgramScreen onBack={() => setView("home")} />;
   if (view === "queue" && (me.user.role === "approver" || me.user.role === "admin")) return <MatchQueue onBack={() => setView("home")} />;
   return (
     <Home
@@ -77,6 +82,7 @@ export default function App() {
       onEditProfile={() => setView("profile")}
       onAdmin={() => setView("admin")}
       onQueue={() => setView("queue")}
+      onProgram={() => setView("program")}
       onOpenChat={(m) => {
         setChatWith(m);
         setView("chat");

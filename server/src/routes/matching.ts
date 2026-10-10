@@ -2,9 +2,11 @@ import { and, desc, eq } from "drizzle-orm";
 import { Hono } from "hono";
 import { z } from "zod";
 import type { Db, Deps } from "../app.js";
-import { auditEvents, matches, reports } from "../db/schema.js";
+import { auditEvents, matchFeedback, matches, reports, touchpointDeliveries, touchpoints } from "../db/schema.js";
 import { alternatesFor, type Candidate, hardRuleViolation, proposeBatch, scorePair } from "../domain/matching.js";
+import { buildDigest, deliverDueTouchpoints, sendDigest } from "../domain/jobs.js";
 import { expirePending, loadCandidates, loadMatchState } from "../domain/store.js";
+import { pushToUsers } from "../lib/notify.js";
 import { type AppEnv, requireRole, requireUser } from "../lib/session.js";
 
 type State = Awaited<ReturnType<typeof loadMatchState>>;
@@ -53,7 +55,8 @@ const reassignSchema = z
 const manualSchema = z.object({ mentorId: z.string().uuid(), menteeId: z.string().uuid() });
 const noteSchema = z.object({ note: z.string().trim().max(500).optional() });
 
-export function matchingRoutes({ db, mailer, config, hub }: Deps) {
+export function matchingRoutes(deps: Deps) {
+  const { db, mailer, config, hub, pusher } = deps;
   const app = new Hono<AppEnv>();
   app.use("*", requireUser(db, config), requireRole("approver", "admin"));
 
@@ -191,6 +194,9 @@ export function matchingRoutes({ db, mailer, config, hub }: Deps) {
         })
         .catch((err) => console.error("match email failed", err));
     }
+    await pushToUsers(db, pusher, [m.mentorId, m.menteeId], { title: "You've been matched", body: "Open the app to meet your match.", url: "/", tag: `match-${m.id}` });
+    // Post the kickoff touch point right away.
+    await deliverDueTouchpoints(deps, new Date(), m.id);
     return c.json({ match: updated });
   });
 
@@ -291,6 +297,50 @@ export function matchingRoutes({ db, mailer, config, hub }: Deps) {
     if (!r) return c.json({ error: "report not found" }, 404);
     await audit(db, r.matchId, c.get("user").id, "report_resolved", { data: { reportId: r.id } });
     return c.json({ status: "resolved" });
+  });
+
+  // Program health for the G-10: counts and feedback, never chat content.
+  app.get("/program", async (c) => {
+    const tps = await db.select().from(touchpoints).orderBy(touchpoints.sequence);
+    const deliveries = await db.select().from(touchpointDeliveries);
+    const feedback = await db.select().from(matchFeedback).orderBy(desc(matchFeedback.createdAt));
+    const { stats } = await buildDigest(deps, new Date());
+    return c.json({
+      stats,
+      touchpoints: tps.map((t) => {
+        const d = deliveries.filter((x) => x.touchpointId === t.id);
+        return { id: t.id, title: t.title, active: t.active, delivered: d.length, discussed: d.filter((x) => x.discussedAt).length };
+      }),
+      feedback: {
+        count: feedback.length,
+        averageRating: feedback.length ? Math.round((feedback.reduce((a, f) => a + f.rating, 0) / feedback.length) * 10) / 10 : null,
+        recommendPercent: feedback.length ? Math.round((feedback.filter((f) => f.wouldRecommend).length / feedback.length) * 100) : null,
+        comments: feedback.filter((f) => f.comment).slice(0, 25).map((f) => ({ rating: f.rating, comment: f.comment, createdAt: f.createdAt })),
+      },
+    });
+  });
+
+  app.get("/touchpoints", async (c) => c.json({ touchpoints: await db.select().from(touchpoints).orderBy(touchpoints.sequence) }));
+
+  const touchpointSchema = z.object({
+    title: z.string().trim().min(3).max(120),
+    body: z.string().trim().min(10).max(2000),
+    questions: z.array(z.string().trim().min(3).max(300)).max(8),
+    active: z.boolean(),
+  });
+
+  app.put("/touchpoints/:id", async (c) => {
+    const parsed = touchpointSchema.safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) return c.json({ error: "check the title, text and questions", fields: parsed.error.flatten().fieldErrors }, 400);
+    const [row] = await db.update(touchpoints).set(parsed.data).where(eq(touchpoints.id, c.req.param("id"))).returning();
+    if (!row) return c.json({ error: "touch point not found" }, 404);
+    await audit(db, null, c.get("user").id, "touchpoint_edit", { data: { touchpointId: row.id } });
+    return c.json({ touchpoint: row });
+  });
+
+  app.post("/digest/send", async (c) => {
+    const sent = await sendDigest(deps, new Date());
+    return c.json({ sent });
   });
 
   /** The G-10 can end an active match (e.g. after a report). Ended pairs are never re-proposed. */

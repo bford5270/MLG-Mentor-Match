@@ -55,9 +55,10 @@ describe("chat", () => {
     expect(JSON.parse(received[0])).toMatchObject({ type: "message", matchId, message: { body: SECRET } });
     hub.remove(menteeId, socket);
 
-    expect((await mentee.call("GET", "/me/matches")).body.matches[0].unread).toBe(1);
+    // The kickoff touch point (system message) plus the mentor's message.
+    expect((await mentee.call("GET", "/me/matches")).body.matches[0].unread).toBe(2);
     const thread = await mentee.call("GET", `/chat/${matchId}/messages`);
-    expect(thread.body.messages.map((m: any) => m.body)).toEqual([SECRET]);
+    expect(thread.body.messages.map((m: any) => m.body).slice(1)).toEqual([SECRET]);
     await mentee.call("POST", `/chat/${matchId}/read`, {});
     expect((await mentee.call("GET", "/me/matches")).body.matches[0].unread).toBe(0);
     expect((await mentor.call("GET", "/me/matches")).body.matches[0].unread).toBe(0);
@@ -101,7 +102,7 @@ describe("chat", () => {
     expect(first.messages).toHaveLength(50);
     expect(first.hasMore).toBe(true);
     const older = (await mentee.call("GET", `/chat/${matchId}/messages?before=${encodeURIComponent(first.messages[0].createdAt)}`)).body;
-    expect(older.messages).toHaveLength(10);
+    expect(older.messages).toHaveLength(11); // 10 seeded + the kickoff touch point
     expect(older.hasMore).toBe(false);
     void mentor;
   });

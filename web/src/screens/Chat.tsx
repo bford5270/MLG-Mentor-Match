@@ -13,6 +13,7 @@ interface Thread {
   messages: ChatMessage[];
   hasMore: boolean;
   partnerLastReadAt: string | null;
+  touchpoints: { touchpointId: string; discussedAt: string | null }[];
 }
 
 const time = (iso: string) => new Date(iso).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
@@ -108,7 +109,15 @@ export default function Chat({ matchId, myId, partner, onBack }: { matchId: stri
       if (e.type === "reconnected") return load();
       if (!("matchId" in e) || e.matchId !== matchId) return;
       if (e.type === "message") {
-        setThread((t) => (t && !t.messages.some((m) => m.id === e.message.id) ? { ...t, messages: [...t.messages, e.message] } : t));
+        setThread((t) =>
+          t && !t.messages.some((m) => m.id === e.message.id)
+            ? {
+                ...t,
+                messages: [...t.messages, e.message],
+                touchpoints: e.message.touchpointId ? [...t.touchpoints, { touchpointId: e.message.touchpointId, discussedAt: null }] : t.touchpoints,
+              }
+            : t,
+        );
         if (e.message.senderId !== myId) markRead();
       } else if (e.type === "read" && e.userId !== myId) {
         setThread((t) => (t ? { ...t, partnerLastReadAt: e.lastReadAt } : t));
@@ -221,7 +230,26 @@ export default function Chat({ matchId, myId, partner, onBack }: { matchId: stri
             <div key={m.id}>
               {showDay && <p className="py-2 text-center text-xs text-slate-500">{day(m.createdAt)}</p>}
               {m.senderId === null ? (
-                <div className="mx-2 whitespace-pre-wrap rounded-lg border border-red-900/20 bg-red-50/50 p-3 text-sm text-slate-800">{m.body}</div>
+                <div className="mx-2 space-y-2 rounded-lg border border-red-900/20 bg-red-50/50 p-3 text-sm text-slate-800">
+                  <p className="whitespace-pre-wrap">{m.body}</p>
+                  {m.touchpointId && (() => {
+                    const d = thread.touchpoints.find((t) => t.touchpointId === m.touchpointId);
+                    return d?.discussedAt ? (
+                      <p className="text-xs font-medium text-green-800">✓ Discussed</p>
+                    ) : ended ? null : (
+                      <Button
+                        variant="secondary"
+                        className="min-h-10 w-full text-sm"
+                        onClick={async () => {
+                          const r = await api<{ discussedAt: string }>("POST", `/chat/${matchId}/touchpoints/${m.touchpointId}/discussed`, {});
+                          setThread((t) => (t ? { ...t, touchpoints: t.touchpoints.map((x) => (x.touchpointId === m.touchpointId ? { ...x, discussedAt: r.discussedAt } : x)) } : t));
+                        }}
+                      >
+                        Mark as discussed
+                      </Button>
+                    );
+                  })()}
+                </div>
               ) : (
                 <div className={`flex ${mine ? "justify-end" : "justify-start"}`}>
                   <div className={`max-w-[80%] whitespace-pre-wrap break-words rounded-2xl px-3 py-2 ${mine ? "rounded-br-sm bg-red-900 text-white" : "rounded-bl-sm bg-slate-100 text-slate-900"}`}>

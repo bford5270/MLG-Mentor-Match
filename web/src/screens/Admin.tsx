@@ -100,7 +100,7 @@ export default function Admin({ selfId, onBack }: { selfId: string; onBack: () =
                   onChange={(e) => setRole(u.id, e.target.value as Role)}
                 >
                   <option value="officer">Officer</option>
-                  <option value="approver">Approver (G-10)</option>
+                  <option value="approver">Approver</option>
                   <option value="admin">Admin</option>
                 </select>
               </li>

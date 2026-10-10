@@ -2,10 +2,12 @@ import { drizzle } from "drizzle-orm/postgres-js";
 import { migrate } from "drizzle-orm/postgres-js/migrator";
 import postgres from "postgres";
 import { createApi } from "../src/app.js";
+import { seedTouchpoints } from "../src/domain/jobs.js";
 import type { Config } from "../src/config.js";
 import * as schema from "../src/db/schema.js";
 import { Hub } from "../src/lib/hub.js";
 import { MemoryMailer } from "../src/lib/mailer.js";
+import { MemoryPusher } from "../src/lib/push.js";
 
 const url = process.env.TEST_DATABASE_URL;
 if (!url) throw new Error("TEST_DATABASE_URL is not set (point it at a disposable database)");
@@ -18,6 +20,8 @@ export async function resetDb() {
   await sql`drop schema if exists drizzle cascade`;
   await sql`create schema public`;
   await migrate(db, { migrationsFolder: "./drizzle" });
+  await seedTouchpoints({ db });
+  pusher.sent = [];
 }
 
 export const config: Config = {
@@ -30,10 +34,11 @@ export const config: Config = {
 
 /** One hub for every client, like the real server. */
 export const hub = new Hub();
+export const pusher = new MemoryPusher();
 
 export function makeClient() {
   const mailer = new MemoryMailer();
-  const api = createApi({ db, mailer, config, hub });
+  const api = createApi({ db, mailer, config, hub, pusher });
   let cookie = "";
   async function call(method: string, path: string, body?: unknown) {
     const res = await api.request(path, {

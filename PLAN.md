@@ -89,6 +89,7 @@ Railway project
 - **Push:** `web-push` with our own VAPID keys. On iOS this requires "Add to Home Screen" (iOS 16.4+); onboarding walks users through it.
 - **Tables:** `roster`, `users`, `profiles`, `login_codes`, `sessions`, `matches`, `audit_events`, `messages`, `touchpoints`, `touchpoint_deliveries`, `reports`, `push_subscriptions`, `settings`.
 - **Cost control:** usage limit set in Railway; expected ~$5–8/mo.
+- **Backups:** not built into the app. Turn on backups for the Postgres volume in the Railway dashboard if your plan offers them.
 
 ## Phases
 
@@ -98,8 +99,8 @@ Railway project
 | 1. Auth + profiles ✅ | Roster upload (CSV from G-1) by admin, email-code sign-in, sessions, onboarding profile, safety banner acknowledgment | 1 week |
 | 2. Matching + G-10 queue ✅ | Port scorer with new dimensions + hard rules + same-service-first passes; batch match; mobile approval queue | 1–1.5 weeks |
 | 3. Chat ✅ | Websocket chat, history, unread badges, report/block/end, access tests | 1–1.5 weeks |
-| 4. Push + touch points | VAPID push, touch-point engine, editable curriculum, email fallback | 1 week |
-| 5. Lifecycle + ops | PRD auto-end, end-of-match feedback, weekly G-10 digest, retention purge, backups | 1 week |
+| 4. Push + touch points ✅ | VAPID push, touch-point engine, editable curriculum, email fallback | 1 week |
+| 5. Lifecycle + ops ✅ | PRD auto-end, end-of-match feedback, weekly G-10 digest, retention purge, backups | 1 week |
 | 6. Pilot | 10–20 pairs; measure sign-up, push opt-in, touch-point completion; decide on native wrapper | — |
 
 ## Pilot settings

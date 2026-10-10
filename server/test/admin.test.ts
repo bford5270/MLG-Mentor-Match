@@ -59,7 +59,8 @@ describe("admin roster", () => {
     const { db, config } = await import("./helpers.js");
     const { MemoryMailer } = await import("../src/lib/mailer.js");
     const { Hub } = await import("../src/lib/hub.js");
-    const api = createApi({ db, config, mailer: new MemoryMailer(), hub: new Hub() });
+    const { MemoryPusher } = await import("../src/lib/push.js");
+    const api = createApi({ db, config, mailer: new MemoryMailer(), hub: new Hub(), pusher: new MemoryPusher() });
     const res = await api.request("/auth/request-code", {
       method: "POST",
       headers: { "content-type": "application/x-www-form-urlencoded" },

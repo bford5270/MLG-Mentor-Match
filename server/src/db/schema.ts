@@ -45,6 +45,8 @@ export const users = pgTable("users", {
   email: text("email").notNull().unique(),
   role: roleEnum("role").notNull().default("officer"),
   safetyAcknowledgedAt: timestamp("safety_acknowledged_at", { withTimezone: true }),
+  /** Last "you have unread messages" email, so the fallback doesn't nag. */
+  lastUnreadEmailAt: timestamp("last_unread_email_at", { withTimezone: true }),
   createdAt: createdAt(),
 });
 
@@ -180,3 +182,17 @@ export const settings = pgTable("settings", {
   key: text("key").primaryKey(),
   value: jsonb("value").notNull(),
 });
+
+// End-of-match feedback, written for the program (visible to the G-10).
+export const matchFeedback = pgTable(
+  "match_feedback",
+  {
+    matchId: uuid("match_id").notNull().references(() => matches.id, { onDelete: "cascade" }),
+    userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    rating: integer("rating").notNull(), // 1–5: how valuable was it
+    wouldRecommend: boolean("would_recommend").notNull(),
+    comment: text("comment"),
+    createdAt: createdAt(),
+  },
+  (t) => [primaryKey({ columns: [t.matchId, t.userId] })],
+);

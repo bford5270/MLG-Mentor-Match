@@ -5,8 +5,9 @@ import { and, desc, eq, inArray, lt, or } from "drizzle-orm";
 import { Hono } from "hono";
 import { z } from "zod";
 import type { Deps } from "../app.js";
-import { auditEvents, matches, messageReads, messages, reports, users } from "../db/schema.js";
+import { auditEvents, matches, messageReads, messages, reports, touchpointDeliveries, users } from "../db/schema.js";
 import type { ChatMessage } from "../lib/hub.js";
+import { pushToUsers } from "../lib/notify.js";
 import { type AppEnv, requireUser } from "../lib/session.js";
 
 const MAX_BODY = 2000;
@@ -31,7 +32,7 @@ export const toChatMessage = (m: typeof messages.$inferSelect): ChatMessage => (
   createdAt: m.createdAt.toISOString(),
 });
 
-export function chatRoutes({ db, config, mailer, hub }: Deps) {
+export function chatRoutes({ db, config, mailer, hub, pusher }: Deps) {
   const app = new Hono<AppEnv>();
   app.use("*", requireUser(db, config));
   const recentSends = new Map<string, number[]>();
@@ -62,12 +63,17 @@ export function chatRoutes({ db, config, mailer, hub }: Deps) {
       .orderBy(desc(messages.createdAt))
       .limit(PAGE + 1);
     const reads = await db.select().from(messageReads).where(eq(messageReads.matchId, m.id));
+    const deliveries = await db
+      .select({ touchpointId: touchpointDeliveries.touchpointId, discussedAt: touchpointDeliveries.discussedAt })
+      .from(touchpointDeliveries)
+      .where(eq(touchpointDeliveries.matchId, m.id));
     const partnerId = m.mentorId === me.id ? m.menteeId : m.mentorId;
     return c.json({
       match: { id: m.id, status: m.status, myRole: m.mentorId === me.id ? "mentor" : "mentee" },
       messages: rows.slice(0, PAGE).reverse().map(toChatMessage),
       hasMore: rows.length > PAGE,
       partnerLastReadAt: reads.find((r) => r.userId === partnerId)?.lastReadAt ?? null,
+      touchpoints: deliveries,
     });
   });
 
@@ -91,6 +97,16 @@ export function chatRoutes({ db, config, mailer, hub }: Deps) {
       .onConflictDoUpdate({ target: [messageReads.matchId, messageReads.userId], set: { lastReadAt: row.createdAt } });
     const message = toChatMessage(row);
     hub.publish(participants(m), { type: "message", matchId: m.id, message });
+    // Push only if the partner doesn't have the app open. No message text on the lock screen.
+    const partnerId = m.mentorId === me.id ? m.menteeId : m.mentorId;
+    if (!hub.isOnline(partnerId)) {
+      void pushToUsers(db, pusher, [partnerId], {
+        title: "New message",
+        body: `Your ${m.mentorId === me.id ? "mentor" : "mentee"} sent you a message.`,
+        url: "/",
+        tag: `msg-${m.id}`,
+      }).catch((err) => console.error("push failed", err));
+    }
     return c.json({ message });
   });
 
@@ -105,6 +121,20 @@ export function chatRoutes({ db, config, mailer, hub }: Deps) {
       .onConflictDoUpdate({ target: [messageReads.matchId, messageReads.userId], set: { lastReadAt } });
     hub.publish(participants(m), { type: "read", matchId: m.id, userId: me.id, lastReadAt: lastReadAt.toISOString() });
     return c.json({ lastReadAt });
+  });
+
+  // Either officer can mark a touch point as discussed; the G-10 sees counts only.
+  app.post("/:matchId/touchpoints/:touchpointId/discussed", async (c) => {
+    const me = c.get("user");
+    const m = await participantMatch(c.req.param("matchId"), me.id);
+    if (!m) return notFound(c);
+    const [row] = await db
+      .update(touchpointDeliveries)
+      .set({ discussedAt: new Date() })
+      .where(and(eq(touchpointDeliveries.matchId, m.id), eq(touchpointDeliveries.touchpointId, c.req.param("touchpointId"))))
+      .returning();
+    if (!row) return c.json({ error: "touch point not found" }, 404);
+    return c.json({ discussedAt: row.discussedAt });
   });
 
   app.post("/:matchId/report", async (c) => {

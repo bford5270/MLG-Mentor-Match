@@ -2,7 +2,7 @@ import { and, asc, eq, gt, ilike, inArray, isNull, ne, or, sql } from "drizzle-o
 import { Hono } from "hono";
 import { z } from "zod";
 import type { Deps } from "../app.js";
-import { matches, messageReads, messages, profiles, roster, users } from "../db/schema.js";
+import { matchFeedback, matches, messageReads, messages, profiles, roster, users } from "../db/schema.js";
 import {
   CAREER_GOALS,
   COMMISSIONING_SOURCES,
@@ -170,6 +170,53 @@ export function meRoutes({ db, config }: Deps) {
         };
       }),
     });
+  });
+
+  // Ended mentorships (last 60 days) this officer hasn't left feedback on yet.
+  app.get("/me/feedback-due", async (c) => {
+    const me = c.get("user");
+    const since = new Date(Date.now() - 60 * 86400_000);
+    const rows = await db
+      .select({ match: matches, feedbackUser: matchFeedback.userId })
+      .from(matches)
+      .leftJoin(matchFeedback, and(eq(matchFeedback.matchId, matches.id), eq(matchFeedback.userId, me.id)))
+      .where(
+        and(
+          inArray(matches.status, ["ended", "reassigned"]),
+          gt(matches.endedAt, since),
+          sql`${matches.approvedAt} is not null`,
+          or(eq(matches.mentorId, me.id), eq(matches.menteeId, me.id)),
+        ),
+      );
+    const due = rows.filter((r) => !r.feedbackUser).map((r) => r.match);
+    const partnerIds = due.map((m) => (m.mentorId === me.id ? m.menteeId : m.mentorId));
+    const partners = partnerIds.length ? await db.select().from(profiles).where(inArray(profiles.userId, partnerIds)) : [];
+    return c.json({
+      due: due.map((m) => {
+        const p = partners.find((x) => x.userId === (m.mentorId === me.id ? m.menteeId : m.mentorId));
+        return { matchId: m.id, myRole: m.mentorId === me.id ? "mentor" : "mentee", partner: p ? `${p.grade} ${p.name}` : "your match" };
+      }),
+    });
+  });
+
+  app.post("/me/matches/:id/feedback", async (c) => {
+    const me = c.get("user");
+    const parsed = z
+      .object({ rating: z.number().int().min(1).max(5), wouldRecommend: z.boolean(), comment: z.string().trim().max(2000).optional() })
+      .safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) return c.json({ error: "choose a rating" }, 400);
+    const id = c.req.param("id");
+    if (!z.string().uuid().safeParse(id).success) return c.json({ error: "match not found" }, 404);
+    const [m] = await db
+      .select()
+      .from(matches)
+      .where(and(eq(matches.id, id), or(eq(matches.mentorId, me.id), eq(matches.menteeId, me.id)), sql`${matches.approvedAt} is not null`));
+    if (!m) return c.json({ error: "match not found" }, 404);
+    await db
+      .insert(matchFeedback)
+      .values({ matchId: m.id, userId: me.id, ...parsed.data, comment: parsed.data.comment || null })
+      .onConflictDoNothing();
+    return c.json({ status: "thanks" });
   });
 
   // Picker for reporting senior / reviewing officer. Names, grades and units
