@@ -38,10 +38,11 @@ export async function loadCandidates(db: Db): Promise<Candidate[]> {
 
 export async function loadMatchState(db: Db) {
   const open = await db.select().from(matches).where(inArray(matches.status, [...OPEN_STATUSES]));
+  // Rejected proposals and matches an officer ended are never proposed again.
   const rejected = await db
     .select({ mentorId: matches.mentorId, menteeId: matches.menteeId })
     .from(matches)
-    .where(eq(matches.status, "rejected"));
+    .where(inArray(matches.status, ["rejected", "ended"]));
 
   const mentorLoad = new Map<string, number>();
   const matchedMentees = new Set<string>();

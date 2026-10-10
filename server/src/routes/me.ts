@@ -1,8 +1,8 @@
-import { and, asc, eq, ilike, inArray, or } from "drizzle-orm";
+import { and, asc, eq, gt, ilike, inArray, isNull, ne, or, sql } from "drizzle-orm";
 import { Hono } from "hono";
 import { z } from "zod";
 import type { Deps } from "../app.js";
-import { matches, profiles, roster, users } from "../db/schema.js";
+import { matches, messageReads, messages, profiles, roster, users } from "../db/schema.js";
 import {
   CAREER_GOALS,
   COMMISSIONING_SOURCES,
@@ -128,6 +128,25 @@ export function meRoutes({ db, config }: Deps) {
     const partners = partnerIds.length
       ? await db.select().from(profiles).where(inArray(profiles.userId, partnerIds))
       : [];
+    // Unread = messages from anyone but me (partner or system) after my last read.
+    const unread = new Map<string, number>();
+    for (const m of rows) {
+      const [read] = await db
+        .select({ at: messageReads.lastReadAt })
+        .from(messageReads)
+        .where(and(eq(messageReads.matchId, m.id), eq(messageReads.userId, me.id)));
+      const [{ n }] = await db
+        .select({ n: sql<number>`count(*)::int` })
+        .from(messages)
+        .where(
+          and(
+            eq(messages.matchId, m.id),
+            or(isNull(messages.senderId), ne(messages.senderId, me.id)),
+            read ? gt(messages.createdAt, read.at) : undefined,
+          ),
+        );
+      unread.set(m.id, n);
+    }
     return c.json({
       matches: rows.map((m) => {
         const partnerId = m.mentorId === me.id ? m.menteeId : m.mentorId;
@@ -137,6 +156,7 @@ export function meRoutes({ db, config }: Deps) {
           myRole: m.mentorId === me.id ? "mentor" : "mentee",
           approvedAt: m.approvedAt,
           endsOn: m.endsOn,
+          unread: unread.get(m.id) ?? 0,
           partner: p && {
             name: p.name,
             service: p.service,

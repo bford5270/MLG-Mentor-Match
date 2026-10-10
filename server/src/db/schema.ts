@@ -157,7 +157,7 @@ export const reports = pgTable("reports", {
   matchId: uuid("match_id").notNull().references(() => matches.id),
   reporterId: uuid("reporter_id").notNull().references(() => users.id),
   description: text("description").notNull(),
-  attachedMessages: jsonb("attached_messages").$type<{ sentAt: string; body: string }[]>(),
+  attachedMessages: jsonb("attached_messages").$type<{ sentAt: string; from: string; body: string }[]>(),
   resolvedBy: uuid("resolved_by").references(() => users.id),
   resolvedAt: timestamp("resolved_at", { withTimezone: true }),
   createdAt: createdAt(),

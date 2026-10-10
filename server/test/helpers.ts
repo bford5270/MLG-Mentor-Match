@@ -4,6 +4,7 @@ import postgres from "postgres";
 import { createApi } from "../src/app.js";
 import type { Config } from "../src/config.js";
 import * as schema from "../src/db/schema.js";
+import { Hub } from "../src/lib/hub.js";
 import { MemoryMailer } from "../src/lib/mailer.js";
 
 const url = process.env.TEST_DATABASE_URL;
@@ -27,9 +28,12 @@ export const config: Config = {
   siteUrl: "https://example.test",
 };
 
+/** One hub for every client, like the real server. */
+export const hub = new Hub();
+
 export function makeClient() {
   const mailer = new MemoryMailer();
-  const api = createApi({ db, mailer, config });
+  const api = createApi({ db, mailer, config, hub });
   let cookie = "";
   async function call(method: string, path: string, body?: unknown) {
     const res = await api.request(path, {

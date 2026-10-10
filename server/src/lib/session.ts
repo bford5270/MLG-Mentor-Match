@@ -33,18 +33,22 @@ export function endSession(c: Context) {
   deleteCookie(c, SESSION_COOKIE, { path: "/" });
 }
 
+/** Returns the user id from a session token, or null if it's missing, forged or expired. */
+export async function userIdFromToken(config: Config, token: string | undefined): Promise<string | null> {
+  if (!token) return null;
+  try {
+    const payload = await verify(token, config.sessionSecret, "HS256");
+    return String(payload.sub);
+  } catch {
+    return null;
+  }
+}
+
 /** Loads the signed-in user on every request so role changes apply immediately. */
 export function requireUser(db: Db, config: Config): MiddlewareHandler<AppEnv> {
   return async (c, next) => {
-    const token = getCookie(c, SESSION_COOKIE);
-    if (!token) return c.json({ error: "not signed in" }, 401);
-    let userId: string;
-    try {
-      const payload = await verify(token, config.sessionSecret, "HS256");
-      userId = String(payload.sub);
-    } catch {
-      return c.json({ error: "not signed in" }, 401);
-    }
+    const userId = await userIdFromToken(config, getCookie(c, SESSION_COOKIE));
+    if (!userId) return c.json({ error: "not signed in" }, 401);
     const [user] = await db.select().from(users).where(eq(users.id, userId));
     if (!user) return c.json({ error: "not signed in" }, 401);
     c.set("user", user);

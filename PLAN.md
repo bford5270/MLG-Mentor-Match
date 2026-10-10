@@ -66,7 +66,7 @@ Content is stored as editable data (not hard-coded), so the G-10 can revise prom
 
 - **Admins cannot read chats.** There is no admin endpoint that returns message content, and access is enforced in the API with automated tests proving one user cannot read another pair's messages.
 - **Reporting without reading.** Either officer can *report* a concern. The report contains only what the reporter types plus a match reference; the G-10 can then contact them, pause or end the match, or reassign. Optionally, the reporter can choose to attach specific messages. That attachment is the reporter's decision, not admin access.
-- **Block / end match** is always available to either party.
+- **End match** is always available to either party (an optional reason goes to the G-10 only). An ended pair is never re-proposed, which covers "block". The G-10 can also end an active match.
 - **Banner** on first launch and atop chat: *Unclassified only. No CUI, no PII about others, no operational details.* Acknowledged at sign-up.
 - **Retention:** messages are deleted 30 days after a match ends (configurable).
 - **Personal phones only:** sign-in is by emailed code. Officers register with the email they actually read on their phone (personal or .mil); the roster stores which.
@@ -97,7 +97,7 @@ Railway project
 | 0. Scaffold | Repo layout (`server/` + `web/`), Drizzle schema + first migration, PWA shell, health endpoint, Railway config | 2–3 days |
 | 1. Auth + profiles ✅ | Roster upload (CSV from G-1) by admin, email-code sign-in, sessions, onboarding profile, safety banner acknowledgment | 1 week |
 | 2. Matching + G-10 queue ✅ | Port scorer with new dimensions + hard rules + same-service-first passes; batch match; mobile approval queue | 1–1.5 weeks |
-| 3. Chat | Websocket chat, history, unread badges, report/block/end, access tests | 1–1.5 weeks |
+| 3. Chat ✅ | Websocket chat, history, unread badges, report/block/end, access tests | 1–1.5 weeks |
 | 4. Push + touch points | VAPID push, touch-point engine, editable curriculum, email fallback | 1 week |
 | 5. Lifecycle + ops | PRD auto-end, end-of-match feedback, weekly G-10 digest, retention purge, backups | 1 week |
 | 6. Pilot | 10–20 pairs; measure sign-up, push opt-in, touch-point completion; decide on native wrapper | — |

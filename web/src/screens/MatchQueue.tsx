@@ -37,6 +37,16 @@ interface Overview {
   lastRunAt: string | null;
 }
 
+interface Report {
+  id: string;
+  createdAt: string;
+  resolvedAt: string | null;
+  description: string;
+  attachedMessages: { sentAt: string; from: string; body: string }[];
+  reporter?: Officer;
+  match?: { id: string; status: string; mentor?: Officer; mentee?: Officer };
+}
+
 const svc = (s: string) => (s === "usn" ? "USN" : "USMC");
 const who = (o: Officer) => `${o.grade} ${o.name}`;
 const daysAgo = (iso: string) => Math.floor((Date.now() - new Date(iso).getTime()) / 86400_000);
@@ -119,12 +129,17 @@ function PendingCard({ m, act }: { m: Pending; act: (path: string, body?: unknow
 
 export default function MatchQueue({ onBack }: { onBack: () => void }) {
   const [data, setData] = useState<Overview | null>(null);
-  const [tab, setTab] = useState<"queue" | "active" | "manual">("queue");
+  const [tab, setTab] = useState<"queue" | "active" | "reports" | "manual">("queue");
+  const [reports, setReports] = useState<Report[]>([]);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [manual, setManual] = useState({ mentorId: "", menteeId: "" });
 
-  const refresh = useCallback(async () => setData(await api<Overview>("GET", "/matching/overview")), []);
+  const refresh = useCallback(async () => {
+    const [overview, r] = await Promise.all([api<Overview>("GET", "/matching/overview"), api<{ reports: Report[] }>("GET", "/matching/reports")]);
+    setData(overview);
+    setReports(r.reports);
+  }, []);
   useEffect(() => {
     refresh();
   }, [refresh]);
@@ -154,6 +169,12 @@ export default function MatchQueue({ onBack }: { onBack: () => void }) {
     }
   }
 
+  async function endMatch(id: string) {
+    const note = prompt("End this active match? Both officers lose the chat and won't be re-paired.\n\nOptional note for the audit log:");
+    if (note === null) return;
+    await act(`/matches/${id}/end`, { note: note || undefined });
+  }
+
   async function saveManual() {
     await act("/manual", manual);
     setManual({ mentorId: "", menteeId: "" });
@@ -174,8 +195,13 @@ export default function MatchQueue({ onBack }: { onBack: () => void }) {
         {message && <p className="rounded-lg bg-green-50 p-3 text-sm text-green-900">{message}</p>}
         {error && <p className="rounded-lg bg-red-50 p-3 text-sm text-red-800">{error}</p>}
 
-        <div className="grid grid-cols-3 gap-1 rounded-lg bg-slate-100 p-1 text-sm">
-          {([["queue", `Pending (${data.queue.length})`], ["active", `Active (${data.active.length})`], ["manual", "Manual"]] as const).map(([key, label]) => (
+        <div className="grid grid-cols-4 gap-1 rounded-lg bg-slate-100 p-1 text-sm">
+          {([
+            ["queue", `Pending ${data.queue.length}`],
+            ["active", `Active ${data.active.length}`],
+            ["reports", `Reports ${reports.filter((r) => !r.resolvedAt).length}`],
+            ["manual", "Manual"],
+          ] as const).map(([key, label]) => (
             <button key={key} onClick={() => setTab(key)} className={`min-h-10 rounded-md ${tab === key ? "bg-white font-medium shadow-sm" : "text-slate-600"}`}>
               {label}
             </button>
@@ -202,6 +228,42 @@ export default function MatchQueue({ onBack }: { onBack: () => void }) {
                   </div>
                   <OfficerLine label="Mentor" o={m.mentor} />
                   <OfficerLine label="Mentee" o={m.mentee} />
+                  <Button variant="ghost" className="w-full text-sm" onClick={() => endMatch(m.id)}>End match</Button>
+                </li>
+              ))}
+            </ul>
+          ))}
+
+        {tab === "reports" &&
+          (reports.length === 0 ? (
+            <p className="text-slate-600">No reports.</p>
+          ) : (
+            <ul className="space-y-3">
+              {reports.map((r) => (
+                <li key={r.id} className={`space-y-2 rounded-lg border p-4 ${r.resolvedAt ? "border-slate-200 opacity-70" : "border-red-300"}`}>
+                  <p className="text-xs text-slate-500">
+                    {new Date(r.createdAt).toLocaleString()} · {r.resolvedAt ? "Resolved" : "Open"}
+                  </p>
+                  {r.reporter && <p className="text-sm">From <span className="font-medium">{who(r.reporter)}</span></p>}
+                  {r.match?.mentor && r.match.mentee && (
+                    <p className="text-sm text-slate-600">Match: {who(r.match.mentor)} → {who(r.match.mentee)} ({r.match.status})</p>
+                  )}
+                  <p className="whitespace-pre-wrap rounded-lg bg-slate-50 p-3 text-sm">{r.description}</p>
+                  {r.attachedMessages.length > 0 && (
+                    <div className="space-y-1">
+                      <p className="text-xs font-medium text-slate-600">Messages the reporter chose to share</p>
+                      {r.attachedMessages.map((m, i) => (
+                        <p key={i} className="rounded border border-slate-200 p-2 text-sm">
+                          <span className="block text-xs text-slate-500">{m.from} · {new Date(m.sentAt).toLocaleString()}</span>
+                          <span className="whitespace-pre-wrap">{m.body}</span>
+                        </p>
+                      ))}
+                    </div>
+                  )}
+                  <div className="grid grid-cols-2 gap-2">
+                    {!r.resolvedAt && <Button variant="secondary" onClick={() => act(`/reports/${r.id}/resolve`)}>Mark resolved</Button>}
+                    {r.match?.status === "active" && <Button variant="secondary" onClick={() => endMatch(r.match!.id)}>End match</Button>}
+                  </div>
                 </li>
               ))}
             </ul>

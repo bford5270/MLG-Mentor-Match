@@ -2,7 +2,7 @@ import { and, desc, eq } from "drizzle-orm";
 import { Hono } from "hono";
 import { z } from "zod";
 import type { Db, Deps } from "../app.js";
-import { auditEvents, matches } from "../db/schema.js";
+import { auditEvents, matches, reports } from "../db/schema.js";
 import { alternatesFor, type Candidate, hardRuleViolation, proposeBatch, scorePair } from "../domain/matching.js";
 import { expirePending, loadCandidates, loadMatchState } from "../domain/store.js";
 import { type AppEnv, requireRole, requireUser } from "../lib/session.js";
@@ -53,7 +53,7 @@ const reassignSchema = z
 const manualSchema = z.object({ mentorId: z.string().uuid(), menteeId: z.string().uuid() });
 const noteSchema = z.object({ note: z.string().trim().max(500).optional() });
 
-export function matchingRoutes({ db, mailer, config }: Deps) {
+export function matchingRoutes({ db, mailer, config, hub }: Deps) {
   const app = new Hono<AppEnv>();
   app.use("*", requireUser(db, config), requireRole("approver", "admin"));
 
@@ -252,6 +252,57 @@ export function matchingRoutes({ db, mailer, config }: Deps) {
     });
     if (!created) return c.json({ error: "match changed; refresh and try again" }, 409);
     return c.json({ match: created });
+  });
+
+  app.get("/reports", async (c) => {
+    const rows = await db.select().from(reports).orderBy(desc(reports.createdAt)).limit(100);
+    const candidates = await loadCandidates(db);
+    const byId = new Map(candidates.map((x) => [x.userId, x]));
+    const matchRows = rows.length
+      ? await db.query.matches.findMany({ where: (m, { inArray }) => inArray(m.id, [...new Set(rows.map((r) => r.matchId))]) })
+      : [];
+    return c.json({
+      reports: rows.map((r) => {
+        const m = matchRows.find((x) => x.id === r.matchId);
+        const mentor = m && byId.get(m.mentorId);
+        const mentee = m && byId.get(m.menteeId);
+        const reporter = byId.get(r.reporterId);
+        return {
+          id: r.id,
+          createdAt: r.createdAt,
+          resolvedAt: r.resolvedAt,
+          description: r.description,
+          attachedMessages: r.attachedMessages ?? [],
+          reporter: reporter && summary(reporter),
+          match: m && { id: m.id, status: m.status, mentor: mentor && summary(mentor), mentee: mentee && summary(mentee) },
+        };
+      }),
+    });
+  });
+
+  app.post("/reports/:id/resolve", async (c) => {
+    const id = c.req.param("id");
+    if (!z.string().uuid().safeParse(id).success) return c.json({ error: "report not found" }, 404);
+    const [r] = await db
+      .update(reports)
+      .set({ resolvedAt: new Date(), resolvedBy: c.get("user").id })
+      .where(eq(reports.id, id))
+      .returning({ id: reports.id, matchId: reports.matchId });
+    if (!r) return c.json({ error: "report not found" }, 404);
+    await audit(db, r.matchId, c.get("user").id, "report_resolved", { data: { reportId: r.id } });
+    return c.json({ status: "resolved" });
+  });
+
+  /** The G-10 can end an active match (e.g. after a report). Ended pairs are never re-proposed. */
+  app.post("/matches/:id/end", async (c) => {
+    const body = noteSchema.safeParse(await c.req.json().catch(() => ({})));
+    const m = await getMatch(c.req.param("id"));
+    if (!m) return c.json({ error: "match not found" }, 404);
+    if (m.status !== "active") return c.json({ error: `match is ${m.status}` }, 409);
+    await db.update(matches).set({ status: "ended", endedAt: new Date() }).where(eq(matches.id, m.id));
+    await audit(db, m.id, c.get("user").id, "ended_by_approver", { note: body.success ? body.data.note : undefined });
+    hub.publish([m.mentorId, m.menteeId], { type: "match_ended", matchId: m.id });
+    return c.json({ status: "ended" });
   });
 
   return app;

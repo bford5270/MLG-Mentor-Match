@@ -1,22 +1,36 @@
 import { useEffect, useState } from "react";
 import { api, type Me } from "../api";
+import { subscribe } from "../live";
 import { Button, SafetyBanner, Screen } from "../components/ui";
 
 const isStandalone = () =>
   window.matchMedia("(display-mode: standalone)").matches || (navigator as { standalone?: boolean }).standalone === true;
 const isIOS = () => /iPhone|iPad|iPod/.test(navigator.userAgent);
 
-interface MyMatch {
+export interface MyMatch {
   id: string;
+  unread: number;
   myRole: "mentor" | "mentee";
   endsOn: string | null;
   partner?: { name: string; service: string; grade: string; mosOrDesignator: string; unit: string; careerGoals: string[]; leadershipInterests: string[]; bio: string | null };
 }
 
-export default function Home({ me, onEditProfile, onAdmin, onQueue, onSignedOut }: { me: Me; onEditProfile: () => void; onAdmin: () => void; onQueue: () => void; onSignedOut: () => void }) {
+interface HomeProps {
+  me: Me;
+  onEditProfile: () => void;
+  onAdmin: () => void;
+  onQueue: () => void;
+  onOpenChat: (m: MyMatch) => void;
+  onSignedOut: () => void;
+}
+
+export default function Home({ me, onEditProfile, onAdmin, onQueue, onOpenChat, onSignedOut }: HomeProps) {
   const [matches, setMatches] = useState<MyMatch[] | null>(null);
   useEffect(() => {
-    api<{ matches: MyMatch[] }>("GET", "/me/matches").then((r) => setMatches(r.matches)).catch(() => setMatches([]));
+    const load = () => api<{ matches: MyMatch[] }>("GET", "/me/matches").then((r) => setMatches(r.matches)).catch(() => setMatches([]));
+    load();
+    // Any live event (new message, ended match, reconnect) can change the cards.
+    return subscribe(() => load());
   }, []);
   const asMentee = matches?.some((m) => m.myRole === "mentee");
   const stillWaiting = stillWantsMatch(me, matches);
@@ -51,7 +65,10 @@ export default function Home({ me, onEditProfile, onAdmin, onQueue, onSignedOut 
             {m.partner.careerGoals.length > 0 && <p className="text-sm text-slate-700"><span className="font-medium">Goals:</span> {m.partner.careerGoals.join(", ")}</p>}
             {m.partner.leadershipInterests.length > 0 && <p className="text-sm text-slate-700"><span className="font-medium">Wants to talk about:</span> {m.partner.leadershipInterests.join(", ")}</p>}
             {m.partner.bio && <p className="text-sm text-slate-700">{m.partner.bio}</p>}
-            <p className="text-xs text-slate-500">In-app chat is coming in the next update.{m.endsOn ? ` Match runs until ${m.endsOn}.` : ""}</p>
+            <Button className="w-full" onClick={() => onOpenChat(m)}>
+              {m.unread > 0 ? `Open chat · ${m.unread} new` : "Open chat"}
+            </Button>
+            {m.endsOn && <p className="text-xs text-slate-500">Match runs until {m.endsOn}.</p>}
           </section>
         ))}
 
