@@ -104,7 +104,7 @@ Railway project
 ## Pilot settings
 
 - **App URL:** the free `*.up.railway.app` address Railway assigns.
-- **Email sending domain:** a 1st Med "listening post" domain the project owner already holds (exact domain + Resend DNS setup to confirm). Pilot only; revisit for a wider rollout.
+- **Email sending domain:** `1stmedlisteningpost.com` (already verified in Resend). Sender: `mentorship@1stmedlisteningpost.com`. Pilot only; revisit for a wider rollout.
 - **Mentor capacity:** 1 mentee per mentor by default (officer may raise to 3).
 - **Grade gap:** mentor at least one grade senior; two grades for O-1/O-2 mentees.
 - **Roster source:** the G-1 provides the officer roster (CSV). Refresh cadence TBD.
