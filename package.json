@@ -1,0 +1,16 @@
+{
+  "name": "mlg-mentor-match",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "pnpm --filter web build && pnpm --filter server build",
+    "start": "pnpm --filter server start",
+    "dev:server": "pnpm --filter server dev",
+    "dev:web": "pnpm --filter web dev",
+    "typecheck": "pnpm -r typecheck",
+    "db:generate": "pnpm --filter server db:generate",
+    "db:migrate": "pnpm --filter server db:migrate"
+  },
+  "engines": { "node": ">=22" },
+  "packageManager": "pnpm@10.28.0"
+}
